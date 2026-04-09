@@ -6,10 +6,12 @@ import { Button } from "@workspace/ui/button";
 import { Card, CardContent } from "@workspace/ui/card";
 import {
   AtSign,
+  ChevronDown,
   FolderOpen,
   Home as HomeIcon,
   Send,
   Sparkles,
+  X,
 } from "lucide-react";
 
 const sidebarItems = [
@@ -18,6 +20,14 @@ const sidebarItems = [
   { label: "资产", icon: FolderOpen, active: false },
 ];
 
+const ratioOptions = [
+  { label: "自动", w: 1, h: 1, auto: true },
+  { label: "1:1", w: 1, h: 1 },
+  { label: "3:4", w: 3, h: 4 },
+  { label: "4:3", w: 4, h: 3 },
+  { label: "9:16", w: 9, h: 16 },
+  { label: "16:9", w: 16, h: 9 },
+];
 
 export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -26,6 +36,8 @@ export default function Home() {
   const [hovered, setHovered] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedRatio, setSelectedRatio] = useState("9:16");
+  const [showRatioPopup, setShowRatioPopup] = useState(false);
 
   const handleImageHover = useCallback((index: number | null) => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
@@ -36,9 +48,15 @@ export default function Home() {
     }
   }, []);
 
+  const handleDelete = (index: number) => {
+    setFiles((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.map((f, i) => ({ ...f, name: `图片${i + 1}` }));
+    });
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files;
-    toast.info(`onChange 触发，选中 ${selected?.length ?? 0} 个文件`);
     if (!selected || selected.length === 0) return;
 
     const allSelected = Array.from(selected);
@@ -56,25 +74,15 @@ export default function Home() {
     }
 
     setUploading(true);
-    toast.info("开始上传...");
     try {
       for (const file of toUpload) {
-        toast.info(`正在上传: ${file.name} (${file.size} bytes, ${file.type})`);
         const formData = new FormData();
         formData.append("file", file);
 
-        let res: Response;
-        try {
-          res = await fetch("http://localhost:3002/upload", {
-            method: "POST",
-            body: formData,
-          });
-        } catch (fetchErr) {
-          toast.error(`fetch 网络错误: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`);
-          throw fetchErr;
-        }
-
-        toast.info(`上传响应: ${res.status}`);
+        const res = await fetch("http://localhost:3002/upload", {
+          method: "POST",
+          body: formData,
+        });
 
         if (!res.ok) {
           const err = await res.json().catch(() => null);
@@ -82,7 +90,6 @@ export default function Home() {
         }
 
         const data: { url: string; key: string } = await res.json();
-        toast.success(`上传成功: ${data.url}`);
         setFiles((prev) => [
           ...prev,
           { url: data.url, name: `图片${prev.length + 1}` },
@@ -141,7 +148,7 @@ export default function Home() {
 
               <Card className="rounded-[28px] border-[#ececef] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.01),0_10px_28px_rgba(15,23,42,0.02)]">
                 <CardContent className="p-[18px]">
-                  <div className="mb-9 flex items-start gap-5">
+                  <div className="relative mb-9" style={{ minHeight: "84px" }}>
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -151,18 +158,29 @@ export default function Home() {
                       onChange={handleFileSelect}
                     />
                     {files.length === 0 ? (
-                      <div
-                        onClick={() => !uploading && fileInputRef.current?.click()}
-                        className={`mt-[6px] flex h-[78px] w-[56px] shrink-0 rotate-[-9deg] cursor-pointer items-center justify-center rounded-[6px] border border-[#ececef] bg-[linear-gradient(180deg,#f6f6f7_0%,#efeff1_100%)] text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] transition-transform duration-150 hover:scale-[1.2] ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-                      >
-                        <span className="text-[31px] font-light leading-none">+</span>
+                      <div className="flex items-start gap-5">
+                        <div
+                          onClick={() => !uploading && fileInputRef.current?.click()}
+                          className={`mt-[6px] flex h-[78px] w-[56px] shrink-0 rotate-[-9deg] cursor-pointer items-center justify-center rounded-[6px] border border-[#ececef] bg-[linear-gradient(180deg,#f6f6f7_0%,#efeff1_100%)] text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] transition-transform duration-150 hover:scale-[1.1] ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+                        >
+                          <span className="text-[31px] font-light leading-none">+</span>
+                        </div>
+                        <div className="pt-1 text-[15px] leading-8 text-zinc-400">
+                          上传产品图、输入文字或
+                          <span className="mx-2 inline-flex size-8 items-center justify-center rounded-[10px] border border-[#e8e8ea] bg-white text-sky-500">
+                            @
+                          </span>
+                          主体，打造爆款视频吧！
+                        </div>
                       </div>
                     ) : (
                       <div className="relative mt-[6px] shrink-0">
                         <div
-                          className="relative h-[78px] transition-[width] duration-300"
+                          className="relative h-[78px] transition-[width] duration-500"
                           style={{
-                            width: hovered ? `${(files.length - 1) * 62 + 56}px` : "56px",
+                            width: hovered
+                              ? `${(files.length < 9 ? files.length : files.length - 1) * 68 + 56}px`
+                              : "56px",
                           }}
                           onMouseEnter={() => setHovered(true)}
                           onMouseLeave={() => { setHovered(false); handleImageHover(null); }}
@@ -170,11 +188,11 @@ export default function Home() {
                           {files.map((f, i) => (
                             <div
                               key={f.url}
-                              className="absolute top-0 left-0 h-[78px] w-[56px] transition-all duration-300"
+                              className="absolute top-0 left-0 h-[78px] w-[56px] transition-all duration-500"
                               style={{
                                 transform: hovered
-                                  ? `translateX(${i * 62}px) rotate(0deg)${hoveredIndex === i ? " scale(1.1)" : ""}`
-                                  : `rotate(${(i - Math.floor(Math.min(files.length, 3) / 2)) * 10 - 12}deg)`,
+                                  ? `translateX(${i * 68}px) rotate(${(files.length - i) % 2 === 0 ? 5 : -5}deg)${hoveredIndex === i ? " scale(1.1)" : ""}`
+                                  : `rotate(${(files.length - 1 - i) % 2 === 0 ? 8 : -8}deg)`,
                                 zIndex: hoveredIndex === i ? 20 : i,
                                 opacity: !hovered && i < files.length - 3 ? 0 : 1,
                               }}
@@ -182,9 +200,18 @@ export default function Home() {
                               onMouseLeave={() => handleImageHover(null)}
                             >
                               {hovered && hoveredIndex === i && (
-                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-800 px-2 py-0.5 text-[11px] text-white shadow">
-                                  {f.name}
-                                </div>
+                                <>
+                                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-800 px-2 py-0.5 text-[11px] text-white shadow">
+                                    {f.name}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(i); }}
+                                    className="absolute -right-1.5 -top-1.5 z-30 flex size-4 items-center justify-center rounded-full bg-zinc-900 text-white shadow transition-colors hover:bg-black"
+                                  >
+                                    <X className="size-2.5" />
+                                  </button>
+                                </>
                               )}
                               <img
                                 src={f.url}
@@ -193,24 +220,35 @@ export default function Home() {
                               />
                             </div>
                           ))}
+                          {files.length < 9 && (
+                            <div
+                              onClick={() => !uploading && fileInputRef.current?.click()}
+                              className={`absolute top-0 left-0 flex h-[78px] w-[56px] cursor-pointer items-center justify-center rounded-[6px] border border-[#ececef] bg-[linear-gradient(180deg,#f6f6f7_0%,#efeff1_100%)] text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] transition-all duration-500 hover:scale-[1.1] ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+                              style={{
+                                transform: hovered
+                                  ? `translateX(${files.length * 68}px) rotate(5deg)`
+                                  : "rotate(-12deg)",
+                                opacity: hovered ? 1 : 0,
+                                zIndex: files.length,
+                              }}
+                            >
+                              <span className="text-[31px] font-light leading-none">+</span>
+                            </div>
+                          )}
                         </div>
-                        {files.length < 9 && (
+                        {files.length < 9 && !hovered && (
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); !uploading && fileInputRef.current?.click(); }}
-                            onMouseEnter={(e) => e.stopPropagation()}
-                            className={`absolute z-30 flex size-7 items-center justify-center rounded-full border border-[#e8e8ea] bg-white text-zinc-500 shadow-sm transition-all duration-300 hover:bg-zinc-100 hover:shadow-md ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-                            style={{
-                              top: "58px",
-                              left: hovered ? `${(files.length - 1) * 62 + 46}px` : "46px",
-                            }}
+                            onClick={() => !uploading && fileInputRef.current?.click()}
+                            className={`absolute z-30 flex size-8 items-center justify-center rounded-full border border-[#e8e8ea] bg-zinc-100 text-zinc-500 shadow-sm transition-all hover:bg-zinc-200 hover:shadow-md ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+                            style={{ top: "58px", left: "36px" }}
                           >
-                            <span className="text-sm leading-none">+</span>
+                            <span className="text-md leading-none">+</span>
                           </button>
                         )}
                       </div>
                     )}
-                    <div className="pt-1 text-[15px] leading-8 text-zinc-400">
+                    <div className="absolute left-[76px] top-0 pt-1 text-[15px] leading-8 text-zinc-400">
                       上传产品图、输入文字或
                       <span className="mx-2 inline-flex size-8 items-center justify-center rounded-[10px] border border-[#e8e8ea] bg-white text-sky-500">
                         @
@@ -220,9 +258,47 @@ export default function Home() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button size="sm" variant="outline" className="rounded-[8px] text-zinc-700">
-                      自动
-                    </Button>
+                    <div className="relative">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-[8px] text-zinc-700"
+                        onClick={() => setShowRatioPopup((v) => !v)}
+                      >
+                        {selectedRatio === "自动" ? "自动" : selectedRatio}
+                        <ChevronDown className="ml-1 size-3.5" />
+                      </Button>
+                      {showRatioPopup && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setShowRatioPopup(false)} />
+                          <div className="absolute bottom-full left-0 z-50 mb-2 flex gap-1 rounded-[12px] border border-[#ececef] bg-white p-2 shadow-lg">
+                            {ratioOptions.map((opt) => (
+                              <button
+                                key={opt.label}
+                                type="button"
+                                onClick={() => { setSelectedRatio(opt.label); setShowRatioPopup(false); }}
+                                className={`flex flex-col items-center gap-1.5 rounded-[8px] px-3 py-2 transition-colors ${
+                                  selectedRatio === opt.label
+                                    ? "bg-zinc-900 text-white"
+                                    : "text-zinc-500 hover:bg-zinc-100"
+                                }`}
+                              >
+                                <div
+                                  className={`rounded-[3px] border ${
+                                    selectedRatio === opt.label ? "border-white/40" : "border-zinc-300"
+                                  }`}
+                                  style={{
+                                    width: opt.auto ? "18px" : `${Math.round((opt.w / Math.max(opt.w, opt.h)) * 18)}px`,
+                                    height: opt.auto ? "18px" : `${Math.round((opt.h / Math.max(opt.w, opt.h)) * 18)}px`,
+                                  }}
+                                />
+                                <span className="text-[11px] leading-none whitespace-nowrap">{opt.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
                     <Button size="sm" variant="outline" className="rounded-[8px] px-3 text-zinc-700">
                       <AtSign className="size-4" />
                     </Button>
