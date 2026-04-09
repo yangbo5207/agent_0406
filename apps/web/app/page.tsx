@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@workspace/ui/button";
 import { Card, CardContent } from "@workspace/ui/card";
@@ -13,6 +13,22 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { LexicalComposer } from "@lexical/react/LexicalComposer";
+import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
+import { ContentEditable } from "@lexical/react/LexicalContentEditable";
+import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import {
+  $getSelection,
+  $isRangeSelection,
+  createCommand,
+  $createTextNode,
+  $insertNodes,
+  DecoratorNode,
+  EditorState,
+  LexicalNode,
+  SerializedLexicalNode,
+} from "lexical";
 
 const sidebarItems = [
   { label: "灵感", icon: HomeIcon, active: true },
@@ -30,36 +46,170 @@ const ratioOptions = [
   { label: "9:16", w: 9, h: 16 },
 ];
 
+// 输出结构类型
+interface EditorContent {
+  nodes: Array<
+    | { type: "text"; content: string }
+    | { type: "asset"; url: string; name: string }
+  >;
+}
+
+// AssetNode - 原子行内资源节点
+class AssetNode extends DecoratorNode<React.ReactNode> {
+  __url: string;
+  __name: string;
+
+  static getType(): string {
+    return "asset";
+  }
+
+  static clone(node: AssetNode): AssetNode {
+    return new AssetNode(node.__url, node.__name);
+  }
+
+  constructor(url: string, name: string) {
+    super();
+    this.__url = url;
+    this.__name = name;
+  }
+
+  getType(): string {
+    return "asset";
+  }
+
+  getURL(): string {
+    return this.__url;
+  }
+
+  getName(): string {
+    return this.__name;
+  }
+
+  isInline(): boolean {
+    return true;
+  }
+
+  isKeyboardEditable(): boolean {
+    return false;
+  }
+
+  updateDOM(): boolean {
+    return false;
+  }
+
+  clone(): AssetNode {
+    return new AssetNode(this.__url, this.__name);
+  }
+
+  exportJSON(): SerializedLexicalNode & { url: string; name: string } {
+    return {
+      ...super.exportJSON(),
+      type: "asset",
+      url: this.__url,
+      name: this.__name,
+      version: 1,
+    };
+  }
+
+  static importJSON(serializedNode: SerializedLexicalNode & { url: string; name: string }): AssetNode {
+    return new AssetNode(serializedNode.url, serializedNode.name);
+  }
+
+  decorate(): React.ReactNode {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-[4px] border border-[#e8e8ea] bg-[#f8f8f9] px-1 py-0.5 align-baseline text-[15px] leading-8 text-zinc-700"
+        data-lexical-asset="true"
+      >
+        <img src={this.__url} alt={this.__name} className="size-4 rounded-[2px] object-cover" />
+        <span>{this.__name}</span>
+      </span>
+    );
+  }
+}
+
+// 插入资源命令
+const INSERT_ASSET_COMMAND = createCommand<{ url: string; name: string }>("INSERT_ASSET_COMMAND");
+
+// 获取编辑器内容
+function getEditorContent(editorState: EditorState): EditorContent {
+  const nodes: EditorContent["nodes"] = [];
+
+  const root = editorState._nodeMap;
+  root.forEach((node: LexicalNode) => {
+    const nodeType = (node as unknown as { __type: string }).__type;
+    if (nodeType === "text") {
+      const textContent = (node as unknown as { __text: string }).__text;
+      nodes.push({ type: "text", content: textContent });
+    } else if (nodeType === "asset") {
+      const assetNode = node as unknown as { __url: string; __name: string };
+      nodes.push({ type: "asset", url: assetNode.__url, name: assetNode.__name });
+    }
+  });
+
+  return { nodes };
+}
+
+// 自定义资产节点插件
+function AssetNodePlugin({
+  onContentChange,
+}: {
+  onContentChange?: (content: EditorContent) => void;
+}): null {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    const listener = () => {
+      const editorState = editor.getEditorState();
+      const content = getEditorContent(editorState);
+      onContentChange?.(content);
+    };
+
+    return editor.registerUpdateListener(listener);
+  }, [editor, onContentChange]);
+
+  return null;
+}
+
+// 插入资源插件
+function InsertAssetPlugin({
+  onInsertAsset,
+}: {
+  onInsertAsset?: (callback: (url: string, name: string) => void) => void;
+}): null {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    const callback = (url: string, name: string) => {
+      editor.update(() => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          const node = new AssetNode(url, name);
+          $insertNodes([node]);
+          // 插入后创建空文本节点并移动光标
+          const textNode = $createTextNode("");
+          $insertNodes([textNode]);
+          textNode.select();
+        }
+      });
+    };
+    onInsertAsset?.(callback);
+  }, [editor, onInsertAsset]);
+
+  return null;
+}
+
 export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<Array<{ url: string; name: string }>>([]);
   const [uploading, setUploading] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedRatio, setSelectedRatio] = useState("9:16");
   const [showRatioPopup, setShowRatioPopup] = useState(false);
   const [showAtTooltip, setShowAtTooltip] = useState(false);
   const [showResourcePopup, setShowResourcePopup] = useState(false);
-  const [selectedResources, setSelectedResources] = useState<Array<{ url: string; name: string }>>([]);
-  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
-  const [inputText, setInputText] = useState("");
-
-  const handleImageHover = useCallback((index: number | null) => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    if (index !== null) {
-      hoverTimer.current = setTimeout(() => setHoveredIndex(index), 50);
-    } else {
-      setHoveredIndex(null);
-    }
-  }, []);
-
-  const handleDelete = (index: number) => {
-    setFiles((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      return next.map((f, i) => ({ ...f, name: `图片${i + 1}` }));
-    });
-  };
+  const [editorContent, setEditorContent] = useState<EditorContent>({ nodes: [] });
+  const insertAssetRef = useRef<((url: string, name: string) => void) | null>(null);
+  const [editorKey, setEditorKey] = useState(0);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files;
@@ -107,6 +257,27 @@ export default function Home() {
       setUploading(false);
     }
   };
+
+  const handleInsertResource = () => {
+    setShowResourcePopup(true);
+  };
+
+  const handleSelectResource = (resource: { url: string; name: string }) => {
+    if (insertAssetRef.current) {
+      insertAssetRef.current(resource.url, resource.name);
+    }
+    setShowResourcePopup(false);
+    setEditorKey((k) => k + 1);
+  };
+
+  const initialConfig = useMemo(
+    () => ({
+      namespace: "creative-editor",
+      onError: (error: Error) => console.error(error),
+      nodes: [AssetNode],
+    }),
+    []
+  );
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#fafafa_0%,#f7f8fa_100%)] text-zinc-950">
@@ -163,8 +334,10 @@ export default function Home() {
                       className="hidden"
                       onChange={handleFileSelect}
                     />
-                    <div className="flex items-start gap-3">
-                      {/* 上传图片按钮 */}
+
+                    {/* Lexical 富文本编辑器区域 */}
+                    <div className="relative flex items-start gap-5">
+                      {/* 左侧 + 按钮 */}
                       <div
                         onClick={() => !uploading && fileInputRef.current?.click()}
                         className={`mt-[6px] flex h-[78px] w-[56px] shrink-0 rotate-[-9deg] cursor-pointer items-center justify-center rounded-[6px] border border-[#ececef] bg-[linear-gradient(180deg,#f6f6f7_0%,#efeff1_100%)] text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] transition-transform duration-150 hover:scale-[1.1] ${uploading ? "opacity-50 pointer-events-none" : ""}`}
@@ -172,118 +345,52 @@ export default function Home() {
                         <span className="text-[31px] font-light leading-none">+</span>
                       </div>
 
-                      {/* 输入区域 */}
-                      <div className="flex-1 pt-1">
-                        {/* 引用资源列表（内联显示） */}
-                        {selectedResources.length > 0 && (
-                          <div className="mb-2 flex flex-wrap items-center gap-2">
-                            {selectedResources.map((r, i) => (
-                              <span
-                                key={`selected-${r.url}-${i}`}
-                                className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 pl-1 pr-2"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => setFullscreenImage(r.url)}
-                                  className="flex items-center gap-1.5"
+                      {/* Lexical 编辑器 */}
+                      <div className="min-h-[78px] flex-1 pt-1">
+                        <LexicalComposer
+                          key={editorKey}
+                          initialConfig={initialConfig}
+                        >
+                          <RichTextPlugin
+                            contentEditable={
+                              <ContentEditable className="text-[15px] leading-8 text-zinc-400 outline-none min-h-[78px]" />
+                            }
+                            placeholder={
+                              <div className="text-[15px] leading-8 text-zinc-400 pointer-events-none absolute top-0 left-0 select-none">
+                                上传产品图、输入文字或
+                                <span
+                                  className="relative mx-2 inline-flex size-8 cursor-pointer items-center justify-center rounded-[10px] border border-[#e8e8ea] bg-white text-sky-500 pointer-events-auto"
+                                  onMouseEnter={() => setShowAtTooltip(true)}
+                                  onMouseLeave={() => setShowAtTooltip(false)}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleInsertResource();
+                                  }}
                                 >
-                                  <img src={r.url} className="size-[22px] rounded object-cover" alt={r.name} />
-                                  <span className="text-[15px] text-zinc-500">{r.name}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedResources(prev => prev.filter(x => x.url !== r.url))}
-                                  className="ml-1 text-zinc-400 hover:text-zinc-600"
-                                >
-                                  <X className="size-3" />
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* 文字输入 */}
-                        <div className="flex items-center gap-2">
-                          <textarea
-                            value={inputText}
-                            onChange={(e) => setInputText(e.target.value)}
-                            placeholder="输入文字，打造爆款视频吧！"
-                            className="min-h-[32px] flex-1 resize-none bg-transparent text-[15px] leading-8 text-zinc-800 placeholder:text-zinc-400 focus:outline-none"
-                            rows={1}
-                            onInput={(e) => {
-                              const target = e.currentTarget;
-                              target.style.height = 'auto';
-                              target.style.height = target.scrollHeight + 'px';
+                                  @
+                                  {showAtTooltip && (
+                                    <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-white shadow">
+                                      引用参考
+                                    </span>
+                                  )}
+                                </span>
+                                主体，打造爆款视频吧！
+                              </div>
+                            }
+                            ErrorBoundary={LexicalErrorBoundary}
+                          />
+                          <AssetNodePlugin
+                            onContentChange={setEditorContent}
+                          />
+                          <InsertAssetPlugin
+                            onInsertAsset={(callback) => {
+                              insertAssetRef.current = callback;
                             }}
                           />
-                        </div>
+                        </LexicalComposer>
                       </div>
                     </div>
-
-                    {/* 已上传图片堆叠显示（位于输入区域下方） */}
-                    {files.length > 0 && (
-                      <div
-                        className="relative mt-4 h-[78px] transition-[width] duration-500"
-                        style={{
-                          width: hovered
-                            ? `${(files.length < 9 ? files.length : files.length - 1) * 68 + 56}px`
-                            : "56px",
-                        }}
-                        onMouseEnter={() => setHovered(true)}
-                        onMouseLeave={() => { setHovered(false); handleImageHover(null); }}
-                      >
-                        {files.map((f, i) => (
-                          <div
-                            key={f.url}
-                            className="absolute top-0 left-0 h-[78px] w-[56px] transition-all duration-500"
-                            style={{
-                              transform: hovered
-                                ? `translateX(${i * 68}px) rotate(${(files.length - i) % 2 === 0 ? 5 : -5}deg)${hoveredIndex === i ? " scale(1.1)" : ""}`
-                                : `rotate(${(files.length - 1 - i) % 2 === 0 ? 8 : -8}deg)`,
-                              zIndex: hoveredIndex === i ? 20 : i,
-                              opacity: !hovered && i < files.length - 3 ? 0 : 1,
-                            }}
-                            onMouseEnter={() => hovered && handleImageHover(i)}
-                            onMouseLeave={() => handleImageHover(null)}
-                          >
-                            {hovered && hoveredIndex === i && (
-                              <>
-                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-800 px-2 py-0.5 text-[11px] text-white shadow">
-                                  {f.name}
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); handleDelete(i); }}
-                                  className="absolute -right-1.5 -top-1.5 z-30 flex size-4 items-center justify-center rounded-full bg-zinc-900 text-white shadow transition-colors hover:bg-black"
-                                >
-                                  <X className="size-2.5" />
-                                </button>
-                              </>
-                            )}
-                            <img
-                              src={f.url}
-                              alt={f.name}
-                              className="h-full w-full rounded-[6px] border border-[#ececef] object-cover shadow-sm"
-                            />
-                          </div>
-                        ))}
-                        {files.length < 9 && (
-                          <div
-                            onClick={() => !uploading && fileInputRef.current?.click()}
-                            className={`absolute top-0 left-0 flex h-[78px] w-[56px] cursor-pointer items-center justify-center rounded-[6px] border border-[#ececef] bg-[linear-gradient(180deg,#f6f6f7_0%,#efeff1_100%)] text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] transition-all duration-500 hover:scale-[1.1] ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-                            style={{
-                              transform: hovered
-                                ? `translateX(${files.length * 68}px) rotate(5deg)`
-                                : "rotate(-12deg)",
-                              opacity: hovered ? 1 : 0,
-                              zIndex: files.length,
-                            }}
-                          >
-                            <span className="text-[31px] font-light leading-none">+</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
@@ -305,7 +412,10 @@ export default function Home() {
                               <button
                                 key={opt.label}
                                 type="button"
-                                onClick={() => { setSelectedRatio(opt.label); setShowRatioPopup(false); }}
+                                onClick={() => {
+                                  setSelectedRatio(opt.label);
+                                  setShowRatioPopup(false);
+                                }}
                                 className={`flex min-w-[52px] flex-col items-center gap-1.5 rounded-[8px] px-2 py-2 transition-colors ${
                                   selectedRatio === opt.label
                                     ? "bg-zinc-900 text-white"
@@ -335,7 +445,7 @@ export default function Home() {
                         className="rounded-[8px] px-3 text-zinc-700"
                         onMouseEnter={() => setShowAtTooltip(true)}
                         onMouseLeave={() => setShowAtTooltip(false)}
-                        onClick={() => setShowResourcePopup(true)}
+                        onClick={() => handleInsertResource()}
                       >
                         <AtSign className="size-4" />
                         {showAtTooltip && (
@@ -357,13 +467,14 @@ export default function Home() {
                                   <button
                                     key={f.url}
                                     type="button"
-                                    onClick={() => {
-                                      setSelectedResources((prev) => [...prev, f]);
-                                      setShowResourcePopup(false);
-                                    }}
+                                    onClick={() => handleSelectResource(f)}
                                     className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-zinc-100"
                                   >
-                                    <img src={f.url} className="size-10 shrink-0 rounded object-cover" alt={f.name} />
+                                    <img
+                                      src={f.url}
+                                      className="size-10 shrink-0 rounded object-cover"
+                                      alt={f.name}
+                                    />
                                     <span className="text-sm text-zinc-700">{f.name}</span>
                                   </button>
                                 ))}
@@ -381,28 +492,6 @@ export default function Home() {
                   </div>
                 </CardContent>
               </Card>
-
-              {fullscreenImage && (
-                <div
-                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-                  onClick={() => setFullscreenImage(null)}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setFullscreenImage(null)}
-                    className="absolute top-4 right-4 z-50 flex size-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
-                  >
-                    <X className="size-6" />
-                  </button>
-                  <img
-                    src={fullscreenImage}
-                    className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
-                    onClick={(e) => e.stopPropagation()}
-                    alt="fullscreen"
-                  />
-                </div>
-              )}
-
             </section>
           </div>
         </div>
