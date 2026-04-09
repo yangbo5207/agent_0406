@@ -8,6 +8,7 @@ import { AppModule } from './app.module'
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
   app.useLogger(app.get(PinoLogger))
+  app.enableCors({ origin: 'http://localhost:3000', methods: ['GET', 'POST'] })
 
   app.useGlobalPipes(
     new ValidationPipe({
