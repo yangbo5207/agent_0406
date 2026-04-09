@@ -278,7 +278,7 @@ export default function Home() {
                                 key={opt.label}
                                 type="button"
                                 onClick={() => { setSelectedRatio(opt.label); setShowRatioPopup(false); }}
-                                className={`flex flex-col items-center gap-1.5 rounded-[8px] px-3 py-2 transition-colors ${
+                                className={`flex min-w-[52px] flex-col items-center gap-1.5 rounded-[8px] px-2 py-2 transition-colors ${
                                   selectedRatio === opt.label
                                     ? "bg-zinc-900 text-white"
                                     : "text-zinc-500 hover:bg-zinc-100"
