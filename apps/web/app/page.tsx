@@ -43,6 +43,7 @@ export default function Home() {
   const [showResourcePopup, setShowResourcePopup] = useState(false);
   const [selectedResources, setSelectedResources] = useState<Array<{ url: string; name: string }>>([]);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [inputText, setInputText] = useState("");
 
   const handleImageHover = useCallback((index: number | null) => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
@@ -162,143 +163,127 @@ export default function Home() {
                       className="hidden"
                       onChange={handleFileSelect}
                     />
-                    {files.length === 0 && selectedResources.length === 0 ? (
-                      <div className="flex items-start gap-5">
-                        <div
-                          onClick={() => !uploading && fileInputRef.current?.click()}
-                          className={`mt-[6px] flex h-[78px] w-[56px] shrink-0 rotate-[-9deg] cursor-pointer items-center justify-center rounded-[6px] border border-[#ececef] bg-[linear-gradient(180deg,#f6f6f7_0%,#efeff1_100%)] text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] transition-transform duration-150 hover:scale-[1.1] ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-                        >
-                          <span className="text-[31px] font-light leading-none">+</span>
-                        </div>
-                        <div className="pt-1 text-[15px] leading-8 text-zinc-400">
-                          上传产品图、输入文字或
-                          <span
-                            className="relative mx-2 inline-flex size-8 cursor-pointer items-center justify-center rounded-[10px] border border-[#e8e8ea] bg-white text-sky-500"
-                            onMouseEnter={() => setShowAtTooltip(true)}
-                            onMouseLeave={() => setShowAtTooltip(false)}
-                            onClick={() => setShowResourcePopup(true)}
-                          >
-                            @
-                            {showAtTooltip && (
-                              <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-white shadow">
-                                引用参考
-                              </span>
-                            )}
-                          </span>
-                          主体，打造爆款视频吧！
-                        </div>
+                    <div className="flex items-start gap-3">
+                      {/* 上传图片按钮 */}
+                      <div
+                        onClick={() => !uploading && fileInputRef.current?.click()}
+                        className={`mt-[6px] flex h-[78px] w-[56px] shrink-0 rotate-[-9deg] cursor-pointer items-center justify-center rounded-[6px] border border-[#ececef] bg-[linear-gradient(180deg,#f6f6f7_0%,#efeff1_100%)] text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] transition-transform duration-150 hover:scale-[1.1] ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+                      >
+                        <span className="text-[31px] font-light leading-none">+</span>
                       </div>
-                    ) : (
-                      <div className="relative mt-[6px] shrink-0">
+
+                      {/* 输入区域 */}
+                      <div className="flex-1 pt-1">
+                        {/* 引用资源列表（内联显示） */}
                         {selectedResources.length > 0 && (
-                          <div className="mb-2 flex items-center gap-2">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
                             {selectedResources.map((r, i) => (
-                              <button
+                              <span
                                 key={`selected-${r.url}-${i}`}
-                                type="button"
-                                onClick={() => setFullscreenImage(r.url)}
-                                className="group relative flex flex-col items-center gap-1"
+                                className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 pl-1 pr-2"
                               >
-                                <img
-                                  src={r.url}
-                                  alt={r.name}
-                                  className="size-14 rounded-lg border border-[#ececef] object-cover shadow-sm transition-transform hover:scale-105"
-                                />
-                                <span className="absolute -bottom-5 text-[10px] text-zinc-400">{r.name}</span>
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setFullscreenImage(r.url)}
+                                  className="flex items-center gap-1.5"
+                                >
+                                  <img src={r.url} className="size-[22px] rounded object-cover" alt={r.name} />
+                                  <span className="text-[15px] text-zinc-500">{r.name}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedResources(prev => prev.filter(x => x.url !== r.url))}
+                                  className="ml-1 text-zinc-400 hover:text-zinc-600"
+                                >
+                                  <X className="size-3" />
+                                </button>
+                              </span>
                             ))}
                           </div>
                         )}
-                        <div
-                          className="relative h-[78px] transition-[width] duration-500"
-                          style={{
-                            width: hovered
-                              ? `${(files.length < 9 ? files.length : files.length - 1) * 68 + 56}px`
-                              : "56px",
-                          }}
-                          onMouseEnter={() => setHovered(true)}
-                          onMouseLeave={() => { setHovered(false); handleImageHover(null); }}
-                        >
-                          {files.map((f, i) => (
-                            <div
-                              key={f.url}
-                              className="absolute top-0 left-0 h-[78px] w-[56px] transition-all duration-500"
-                              style={{
-                                transform: hovered
-                                  ? `translateX(${i * 68}px) rotate(${(files.length - i) % 2 === 0 ? 5 : -5}deg)${hoveredIndex === i ? " scale(1.1)" : ""}`
-                                  : `rotate(${(files.length - 1 - i) % 2 === 0 ? 8 : -8}deg)`,
-                                zIndex: hoveredIndex === i ? 20 : i,
-                                opacity: !hovered && i < files.length - 3 ? 0 : 1,
-                              }}
-                              onMouseEnter={() => hovered && handleImageHover(i)}
-                              onMouseLeave={() => handleImageHover(null)}
-                            >
-                              {hovered && hoveredIndex === i && (
-                                <>
-                                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-800 px-2 py-0.5 text-[11px] text-white shadow">
-                                    {f.name}
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); handleDelete(i); }}
-                                    className="absolute -right-1.5 -top-1.5 z-30 flex size-4 items-center justify-center rounded-full bg-zinc-900 text-white shadow transition-colors hover:bg-black"
-                                  >
-                                    <X className="size-2.5" />
-                                  </button>
-                                </>
-                              )}
-                              <img
-                                src={f.url}
-                                alt={f.name}
-                                className="h-full w-full rounded-[6px] border border-[#ececef] object-cover shadow-sm"
-                              />
-                            </div>
-                          ))}
-                          {files.length < 9 && (
-                            <div
-                              onClick={() => !uploading && fileInputRef.current?.click()}
-                              className={`absolute top-0 left-0 flex h-[78px] w-[56px] cursor-pointer items-center justify-center rounded-[6px] border border-[#ececef] bg-[linear-gradient(180deg,#f6f6f7_0%,#efeff1_100%)] text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] transition-all duration-500 hover:scale-[1.1] ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-                              style={{
-                                transform: hovered
-                                  ? `translateX(${files.length * 68}px) rotate(5deg)`
-                                  : "rotate(-12deg)",
-                                opacity: hovered ? 1 : 0,
-                                zIndex: files.length,
-                              }}
-                            >
-                              <span className="text-[31px] font-light leading-none">+</span>
-                            </div>
-                          )}
+
+                        {/* 文字输入 */}
+                        <div className="flex items-center gap-2">
+                          <textarea
+                            value={inputText}
+                            onChange={(e) => setInputText(e.target.value)}
+                            placeholder="输入文字，打造爆款视频吧！"
+                            className="min-h-[32px] flex-1 resize-none bg-transparent text-[15px] leading-8 text-zinc-800 placeholder:text-zinc-400 focus:outline-none"
+                            rows={1}
+                            onInput={(e) => {
+                              const target = e.currentTarget;
+                              target.style.height = 'auto';
+                              target.style.height = target.scrollHeight + 'px';
+                            }}
+                          />
                         </div>
-                        {files.length < 9 && !hovered && (
-                          <button
-                            type="button"
-                            onClick={() => !uploading && fileInputRef.current?.click()}
-                            className={`absolute z-30 flex size-8 items-center justify-center rounded-full border border-[#e8e8ea] bg-zinc-100 text-zinc-500 shadow-sm transition-all hover:bg-zinc-200 hover:shadow-md ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-                            style={{ top: "58px", left: "36px" }}
+                      </div>
+                    </div>
+
+                    {/* 已上传图片堆叠显示（位于输入区域下方） */}
+                    {files.length > 0 && (
+                      <div
+                        className="relative mt-4 h-[78px] transition-[width] duration-500"
+                        style={{
+                          width: hovered
+                            ? `${(files.length < 9 ? files.length : files.length - 1) * 68 + 56}px`
+                            : "56px",
+                        }}
+                        onMouseEnter={() => setHovered(true)}
+                        onMouseLeave={() => { setHovered(false); handleImageHover(null); }}
+                      >
+                        {files.map((f, i) => (
+                          <div
+                            key={f.url}
+                            className="absolute top-0 left-0 h-[78px] w-[56px] transition-all duration-500"
+                            style={{
+                              transform: hovered
+                                ? `translateX(${i * 68}px) rotate(${(files.length - i) % 2 === 0 ? 5 : -5}deg)${hoveredIndex === i ? " scale(1.1)" : ""}`
+                                : `rotate(${(files.length - 1 - i) % 2 === 0 ? 8 : -8}deg)`,
+                              zIndex: hoveredIndex === i ? 20 : i,
+                              opacity: !hovered && i < files.length - 3 ? 0 : 1,
+                            }}
+                            onMouseEnter={() => hovered && handleImageHover(i)}
+                            onMouseLeave={() => handleImageHover(null)}
                           >
-                            <span className="text-md leading-none">+</span>
-                          </button>
+                            {hovered && hoveredIndex === i && (
+                              <>
+                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-800 px-2 py-0.5 text-[11px] text-white shadow">
+                                  {f.name}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleDelete(i); }}
+                                  className="absolute -right-1.5 -top-1.5 z-30 flex size-4 items-center justify-center rounded-full bg-zinc-900 text-white shadow transition-colors hover:bg-black"
+                                >
+                                  <X className="size-2.5" />
+                                </button>
+                              </>
+                            )}
+                            <img
+                              src={f.url}
+                              alt={f.name}
+                              className="h-full w-full rounded-[6px] border border-[#ececef] object-cover shadow-sm"
+                            />
+                          </div>
+                        ))}
+                        {files.length < 9 && (
+                          <div
+                            onClick={() => !uploading && fileInputRef.current?.click()}
+                            className={`absolute top-0 left-0 flex h-[78px] w-[56px] cursor-pointer items-center justify-center rounded-[6px] border border-[#ececef] bg-[linear-gradient(180deg,#f6f6f7_0%,#efeff1_100%)] text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] transition-all duration-500 hover:scale-[1.1] ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+                            style={{
+                              transform: hovered
+                                ? `translateX(${files.length * 68}px) rotate(5deg)`
+                                : "rotate(-12deg)",
+                              opacity: hovered ? 1 : 0,
+                              zIndex: files.length,
+                            }}
+                          >
+                            <span className="text-[31px] font-light leading-none">+</span>
+                          </div>
                         )}
                       </div>
                     )}
-                    <div className="absolute left-[76px] top-0 pt-1 text-[15px] leading-8 text-zinc-400">
-                      上传产品图、输入文字或
-                      <span
-                        className="relative mx-2 inline-flex size-8 cursor-pointer items-center justify-center rounded-[10px] border border-[#e8e8ea] bg-white text-sky-500"
-                        onMouseEnter={() => setShowAtTooltip(true)}
-                        onMouseLeave={() => setShowAtTooltip(false)}
-                        onClick={() => setShowResourcePopup(true)}
-                      >
-                        @
-                        {showAtTooltip && (
-                          <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-white shadow">
-                            引用参考
-                          </span>
-                        )}
-                      </span>
-                      主体，打造爆款视频吧！
-                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
