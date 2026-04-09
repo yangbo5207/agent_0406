@@ -21,12 +21,13 @@ const sidebarItems = [
 ];
 
 const ratioOptions = [
-  { label: "自动", w: 1, h: 1, auto: true },
+  { label: "智能", w: 0, h: 0, auto: true },
+  { label: "21:9", w: 21, h: 9 },
+  { label: "16:9", w: 16, h: 9 },
+  { label: "4:3", w: 4, h: 3 },
   { label: "1:1", w: 1, h: 1 },
   { label: "3:4", w: 3, h: 4 },
-  { label: "4:3", w: 4, h: 3 },
   { label: "9:16", w: 9, h: 16 },
-  { label: "16:9", w: 16, h: 9 },
 ];
 
 export default function Home() {
@@ -265,7 +266,7 @@ export default function Home() {
                         className="rounded-[8px] text-zinc-700"
                         onClick={() => setShowRatioPopup((v) => !v)}
                       >
-                        {selectedRatio === "自动" ? "自动" : selectedRatio}
+                        {selectedRatio === "智能" ? "智能" : selectedRatio}
                         <ChevronDown className="ml-1 size-3.5" />
                       </Button>
                       {showRatioPopup && (
@@ -288,8 +289,8 @@ export default function Home() {
                                     selectedRatio === opt.label ? "border-white/40" : "border-zinc-300"
                                   }`}
                                   style={{
-                                    width: opt.auto ? "18px" : `${Math.round((opt.w / Math.max(opt.w, opt.h)) * 18)}px`,
-                                    height: opt.auto ? "18px" : `${Math.round((opt.h / Math.max(opt.w, opt.h)) * 18)}px`,
+                                    width: opt.auto ? "16px" : `${Math.round((opt.w / opt.h) * 14)}px`,
+                                    height: "14px",
                                   }}
                                 />
                                 <span className="text-[11px] leading-none whitespace-nowrap">{opt.label}</span>
