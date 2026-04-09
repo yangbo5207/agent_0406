@@ -39,6 +39,10 @@ export default function Home() {
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedRatio, setSelectedRatio] = useState("9:16");
   const [showRatioPopup, setShowRatioPopup] = useState(false);
+  const [showAtTooltip, setShowAtTooltip] = useState(false);
+  const [showResourcePopup, setShowResourcePopup] = useState(false);
+  const [selectedResources, setSelectedResources] = useState<Array<{ url: string; name: string }>>([]);
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
 
   const handleImageHover = useCallback((index: number | null) => {
     if (hoverTimer.current) clearTimeout(hoverTimer.current);
@@ -158,7 +162,7 @@ export default function Home() {
                       className="hidden"
                       onChange={handleFileSelect}
                     />
-                    {files.length === 0 ? (
+                    {files.length === 0 && selectedResources.length === 0 ? (
                       <div className="flex items-start gap-5">
                         <div
                           onClick={() => !uploading && fileInputRef.current?.click()}
@@ -168,14 +172,43 @@ export default function Home() {
                         </div>
                         <div className="pt-1 text-[15px] leading-8 text-zinc-400">
                           上传产品图、输入文字或
-                          <span className="mx-2 inline-flex size-8 items-center justify-center rounded-[10px] border border-[#e8e8ea] bg-white text-sky-500">
+                          <span
+                            className="relative mx-2 inline-flex size-8 cursor-pointer items-center justify-center rounded-[10px] border border-[#e8e8ea] bg-white text-sky-500"
+                            onMouseEnter={() => setShowAtTooltip(true)}
+                            onMouseLeave={() => setShowAtTooltip(false)}
+                            onClick={() => setShowResourcePopup(true)}
+                          >
                             @
+                            {showAtTooltip && (
+                              <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-white shadow">
+                                引用参考
+                              </span>
+                            )}
                           </span>
                           主体，打造爆款视频吧！
                         </div>
                       </div>
                     ) : (
                       <div className="relative mt-[6px] shrink-0">
+                        {selectedResources.length > 0 && (
+                          <div className="mb-2 flex items-center gap-2">
+                            {selectedResources.map((r, i) => (
+                              <button
+                                key={`selected-${r.url}-${i}`}
+                                type="button"
+                                onClick={() => setFullscreenImage(r.url)}
+                                className="group relative flex flex-col items-center gap-1"
+                              >
+                                <img
+                                  src={r.url}
+                                  alt={r.name}
+                                  className="size-14 rounded-lg border border-[#ececef] object-cover shadow-sm transition-transform hover:scale-105"
+                                />
+                                <span className="absolute -bottom-5 text-[10px] text-zinc-400">{r.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <div
                           className="relative h-[78px] transition-[width] duration-500"
                           style={{
@@ -251,8 +284,18 @@ export default function Home() {
                     )}
                     <div className="absolute left-[76px] top-0 pt-1 text-[15px] leading-8 text-zinc-400">
                       上传产品图、输入文字或
-                      <span className="mx-2 inline-flex size-8 items-center justify-center rounded-[10px] border border-[#e8e8ea] bg-white text-sky-500">
+                      <span
+                        className="relative mx-2 inline-flex size-8 cursor-pointer items-center justify-center rounded-[10px] border border-[#e8e8ea] bg-white text-sky-500"
+                        onMouseEnter={() => setShowAtTooltip(true)}
+                        onMouseLeave={() => setShowAtTooltip(false)}
+                        onClick={() => setShowResourcePopup(true)}
+                      >
                         @
+                        {showAtTooltip && (
+                          <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-white shadow">
+                            引用参考
+                          </span>
+                        )}
                       </span>
                       主体，打造爆款视频吧！
                     </div>
@@ -300,9 +343,51 @@ export default function Home() {
                         </>
                       )}
                     </div>
-                    <Button size="sm" variant="outline" className="rounded-[8px] px-3 text-zinc-700">
-                      <AtSign className="size-4" />
-                    </Button>
+                    <div className="relative">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-[8px] px-3 text-zinc-700"
+                        onMouseEnter={() => setShowAtTooltip(true)}
+                        onMouseLeave={() => setShowAtTooltip(false)}
+                        onClick={() => setShowResourcePopup(true)}
+                      >
+                        <AtSign className="size-4" />
+                        {showAtTooltip && (
+                          <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-white shadow">
+                            引用参考
+                          </span>
+                        )}
+                      </Button>
+                      {showResourcePopup && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setShowResourcePopup(false)} />
+                          <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl border border-[#ececef] bg-white p-3 shadow-lg">
+                            <div className="mb-2 text-xs text-zinc-400">选择参考图片</div>
+                            {files.length === 0 ? (
+                              <div className="py-4 text-center text-sm text-zinc-400">暂无上传资源</div>
+                            ) : (
+                              <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+                                {files.map((f) => (
+                                  <button
+                                    key={f.url}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedResources((prev) => [...prev, f]);
+                                      setShowResourcePopup(false);
+                                    }}
+                                    className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-zinc-100"
+                                  >
+                                    <img src={f.url} className="size-10 shrink-0 rounded object-cover" alt={f.name} />
+                                    <span className="text-sm text-zinc-700">{f.name}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
                     <div className="ml-auto">
                       <Button className="size-10 rounded-full border border-[#e8e8ea] bg-zinc-100 p-0 text-zinc-500 shadow-none hover:bg-zinc-200/80">
                         <Send className="size-[18px]" />
@@ -311,6 +396,27 @@ export default function Home() {
                   </div>
                 </CardContent>
               </Card>
+
+              {fullscreenImage && (
+                <div
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+                  onClick={() => setFullscreenImage(null)}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setFullscreenImage(null)}
+                    className="absolute top-4 right-4 z-50 flex size-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+                  >
+                    <X className="size-6" />
+                  </button>
+                  <img
+                    src={fullscreenImage}
+                    className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+                    onClick={(e) => e.stopPropagation()}
+                    alt="fullscreen"
+                  />
+                </div>
+              )}
 
             </section>
           </div>
